@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `cortex_m_rtfm` crate.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, cortex_m_rtfm">
+
+    <title>cortex_m_rtfm - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../normalize.css">
+    <link rel="stylesheet" type="text/css" href="../rustdoc.css">
+    <link rel="stylesheet" type="text/css" href="../main.css">
+    
+
+    
+    
+</head>
+<body class="rustdoc mod">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <nav class="sidebar">
+        
+        <p class='location'>Crate cortex_m_rtfm</p><div class="block items"><ul><li><a href="#macros">Macros</a></li><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li><li><a href="#functions">Functions</a></li><li><a href="#types">Type Definitions</a></li></ul></div><p class='location'></p><script>window.sidebarCurrent = {name: 'cortex_m_rtfm', ty: 'mod', relpath: '../'};</script>
+    </nav>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press ‘S’ to search, ‘?’ for more options…"
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content">
+<h1 class='fqn'><span class='in-band'>Crate <a class="mod" href=''>cortex_m_rtfm</a></span><span class='out-of-band'><span id='render-detail'>
+                   <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
+                       [<span class='inner'>&#x2212;</span>]
+                   </a>
+               </span><a class='srclink' href='../src/cortex_m_rtfm/lib.rs.html#1-936' title='goto source code'>[src]</a></span></h1>
+<div class='docblock'><p>RTFM: Real Time For the Masses (ARM Cortex-M edition)</p>
+
+<p><code>cortex-m-rtfm</code> is a framework for building concurrent applications for ARM
+Cortex-M microcontrollers.</p>
+
+<p>This crate is based on <a href="http://www.rtfm-lang.org/">the RTFM framework</a> created by <a href="https://www.ltu.se/staff/p/pln-1.11258?l=en">prof. Per
+Lindgren</a> and uses a simplified version of the Stack Resource Policy as
+scheduling policy (check the <a href="./index.html#references">references</a> for details).</p>
+
+<h1 id='features' class='section-header'><a href='#features'>Features</a></h1>
+<ul>
+<li><strong>Event triggered tasks</strong> as the unit of concurrency.</li>
+<li>Supports prioritization of tasks and, thus, <strong>preemptive multitasking</strong>.</li>
+<li><strong>Efficient data race free memory sharing</strong> through fine grained <em>non
+global</em> critical sections.</li>
+<li><strong>Deadlock free execution</strong> guaranteed at compile time.</li>
+<li><strong>Minimal scheduling overhead</strong> as the scheduler has no &quot;software
+component&quot;; the hardware does all the scheduling.</li>
+<li><strong>Highly efficient memory usage</strong>. All the tasks share the call stack and
+there&#39;s no hard dependency on a dynamic allocator.</li>
+<li><strong>All Cortex M3, M4 and M7 devices are fully supported</strong>. M0(+) is
+partially supported as the whole API is not available (due to missing
+hardware features).</li>
+<li>The number of task priority levels is configurable at compile time through
+the <code>P2</code> (4 levels), <code>P3</code> (8 levels), etc. Cargo features. The number of
+priority levels supported by the hardware is device specific but this
+crate defaults to 16 as that&#39;s the most common scenario.</li>
+<li>This task model is amenable to known WCET (Worst Case Execution Time)
+analysis and scheduling analysis techniques. (Though we haven&#39;t yet
+developed Rust friendly tooling for that.)</li>
+</ul>
+
+<h1 id='limitations' class='section-header'><a href='#limitations'>Limitations</a></h1>
+<ul>
+<li>Task priorities must remain constant at runtime.</li>
+</ul>
+
+<h1 id='dependencies' class='section-header'><a href='#dependencies'>Dependencies</a></h1>
+<ul>
+<li>A device crate generated using <a href="https://docs.rs/svd2rust/0.7.0/svd2rust/"><code>svd2rust</code></a> v0.7.x</li>
+<li>A <code>start</code> lang time: Vanilla <code>main</code> must be supported in binary crates.
+You can use the <a href="https://docs.rs/cortex-m-rt/0.1.1/cortex_m_rt/"><code>cortex-m-rt</code></a> crate to fulfill the requirement</li>
+</ul>
+
+<h1 id='examples' class='section-header'><a href='#examples'>Examples</a></h1>
+<p>Ordered in increasing level of complexity:</p>
+
+<ul>
+<li><a href="./index.html#zero-tasks">Zero tasks</a></li>
+<li><a href="./index.html#one-task">One task</a></li>
+<li><a href="./index.html#two-serial-tasks">Two &quot;serial&quot; tasks</a></li>
+<li><a href="./index.html#preemptive-multitasking">Preemptive multitasking</a></li>
+<li><a href="./index.html#peripherals-as-resources">Peripherals as resources</a></li>
+</ul>
+
+<h2 id='zero-tasks' class='section-header'><a href='#zero-tasks'>Zero tasks</a></h2>
+<pre class="rust rust-example-rendered">
+<span class="attribute">#<span class="op">!</span>[<span class="ident">feature</span>(<span class="ident">used</span>)]</span>
+<span class="attribute">#<span class="op">!</span>[<span class="ident">no_std</span>]</span>
+
+<span class="attribute">#[<span class="ident">macro_use</span>]</span> <span class="comment">// for the `hprintln!` macro</span>
+<span class="kw">extern</span> <span class="kw">crate</span> <span class="ident">cortex_m</span>;
+
+<span class="comment">// before main initialization + `start` lang item</span>
+<span class="kw">extern</span> <span class="kw">crate</span> <span class="ident">cortex_m_rt</span>;
+
+<span class="attribute">#[<span class="ident">macro_use</span>]</span> <span class="comment">// for the `tasks!` macro</span>
+<span class="kw">extern</span> <span class="kw">crate</span> <span class="ident">cortex_m_rtfm</span> <span class="kw">as</span> <span class="ident">rtfm</span>;
+
+<span class="comment">// device crate generated using svd2rust</span>
+<span class="kw">extern</span> <span class="kw">crate</span> <span class="ident">stm32f30x</span>;
+
+<span class="kw">use</span> <span class="ident">rtfm</span>::{<span class="ident">C16</span>, <span class="ident">P0</span>};
+
+<span class="comment">// TASKS (None in this example)</span>
+<span class="macro">tasks</span><span class="macro">!</span>(<span class="ident">stm32f30x</span>, {});
+
+<span class="comment">// INITIALIZATION PHASE</span>
+<span class="kw">fn</span> <span class="ident">init</span>(<span class="ident">_priority</span>: <span class="ident">P0</span>, <span class="ident">_ceiling</span>: <span class="kw-2">&amp;</span><span class="ident">C16</span>) {
+    <span class="macro">hprintln</span><span class="macro">!</span>(<span class="string">&quot;INIT&quot;</span>);
+}
+
+<span class="comment">// IDLE LOOP</span>
+<span class="kw">fn</span> <span class="ident">idle</span>(<span class="ident">_priority</span>: <span class="ident">P0</span>) <span class="op">-&gt;</span> <span class="op">!</span> {
+    <span class="macro">hprintln</span><span class="macro">!</span>(<span class="string">&quot;IDLE&quot;</span>);
+
+    <span class="comment">// Sleep</span>
+    <span class="kw">loop</span> {
+        <span class="ident">rtfm</span>::<span class="ident">wfi</span>();
+    }
+}</pre>
+
+<p>Expected output:</p>
+
+<pre><code class="language-text">INIT
+IDLE
+</code></pre>
+
+<p>The <code>tasks!</code> macro overrides the <code>main</code> function and imposes the following
+structure into your program:</p>
+
+<ul>
+<li><p><code>init</code>, the initialization phase, runs first. This function is executed
+&quot;atomically&quot;, in the sense that no task / interrupt can preempt it.</p></li>
+<li><p><code>idle</code>, a never ending function that runs after <code>init</code>.</p></li>
+</ul>
+
+<p>Note that both <code>init</code> and <code>idle</code> have priority 0, the lowest priority.</p>
+
+<h1 id='one-task' class='section-header'><a href='#one-task'>One task</a></h1>
+<pre class="rust rust-example-rendered">
+<span class="attribute">#<span class="op">!</span>[<span class="ident">feature</span>(<span class="ident">const_fn</span>)]</span>
+<span class="attribute">#<span class="op">!</span>[<span class="ident">feature</span>(<span class="ident">used</span>)]</span>
+<span class="attribute">#<span class="op">!</span>[<span class="ident">no_std</span>]</span>
+
+<span class="kw">extern</span> <span class="kw">crate</span> <span class="ident">cortex_m_rt</span>;
+<span class="attribute">#[<span class="ident">macro_use</span>]</span>
+<span class="kw">extern</span> <span class="kw">crate</span> <span class="ident">cortex_m_rtfm</span> <span class="kw">as</span> <span class="ident">rtfm</span>;
+<span class="kw">extern</span> <span class="kw">crate</span> <span class="ident">stm32f30x</span>;
+
+<span class="kw">use</span> <span class="ident">stm32f30x</span>::<span class="ident">interrupt</span>::<span class="ident">Tim7</span>;
+<span class="kw">use</span> <span class="ident">rtfm</span>::{<span class="ident">C16</span>, <span class="ident">Local</span>, <span class="ident">P0</span>, <span class="ident">P1</span>};
+
+<span class="comment">// INITIALIZATION PHASE</span>
+<span class="kw">fn</span> <span class="ident">init</span>(<span class="ident">_priority</span>: <span class="ident">P0</span>, <span class="ident">_ceiling</span>: <span class="kw-2">&amp;</span><span class="ident">C16</span>) {
+    <span class="comment">// Configure TIM7 for periodic interrupts</span>
+    <span class="comment">// Configure GPIO for LED driving</span>
+}
+
+<span class="comment">// IDLE LOOP</span>
+<span class="kw">fn</span> <span class="ident">idle</span>(<span class="ident">_priority</span>: <span class="ident">P0</span>) <span class="op">-&gt;</span> <span class="op">!</span> {
+    <span class="comment">// Sleep</span>
+    <span class="kw">loop</span> {
+        <span class="ident">rtfm</span>::<span class="ident">wfi</span>();
+    }
+}
+
+<span class="comment">// TASKS</span>
+<span class="macro">tasks</span><span class="macro">!</span>(<span class="ident">stm32f30x</span>, {
+    <span class="ident">periodic</span>: <span class="ident">Task</span> {
+        <span class="ident">interrupt</span>: <span class="ident">Tim7</span>,
+        <span class="ident">priority</span>: <span class="ident">P1</span>,
+        <span class="ident">enabled</span>: <span class="bool-val">true</span>,
+    },
+});
+
+<span class="kw">fn</span> <span class="ident">periodic</span>(<span class="kw-2">mut</span> <span class="ident">task</span>: <span class="ident">Tim7</span>, <span class="ident">_priority</span>: <span class="ident">P1</span>) {
+    <span class="comment">// Task local data</span>
+    <span class="kw">static</span> <span class="ident">STATE</span>: <span class="ident">Local</span><span class="op">&lt;</span><span class="ident">bool</span>, <span class="ident">Tim7</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">Local</span>::<span class="ident">new</span>(<span class="bool-val">false</span>);
+
+    <span class="kw">let</span> <span class="ident">state</span> <span class="op">=</span> <span class="ident">STATE</span>.<span class="ident">borrow_mut</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">task</span>);
+
+    <span class="comment">// Toggle state</span>
+    <span class="kw-2">*</span><span class="ident">state</span> <span class="op">=</span> <span class="op">!</span><span class="kw-2">*</span><span class="ident">state</span>;
+
+    <span class="comment">// Blink an LED</span>
+    <span class="kw">if</span> <span class="kw-2">*</span><span class="ident">state</span> {
+        <span class="ident">LED</span>.<span class="ident">on</span>();
+    } <span class="kw">else</span> {
+        <span class="ident">LED</span>.<span class="ident">off</span>();
+    }
+}</pre>
+
+<p>Here we define a task named <code>periodic</code> and bind it to the <code>Tim7</code>
+interrupt. The <code>periodic</code> task will run every time the <code>Tim7</code> interrupt
+is triggered. We assign to this task a priority of 1 (<code>P1</code>); this is the
+lowest priority that a task can have.</p>
+
+<p>We use the <a href="./struct.Local.html"><code>Local</code></a> abstraction to add state to the
+task; this task local data will be preserved across runs of the <code>periodic</code>
+task. Note that <code>STATE</code> is owned by the <code>periodic</code> task, in the sense that
+no other task can access it; this is reflected in its type signature (the
+<code>Tim7</code> type parameter).</p>
+
+<h1 id='two-serial-tasks' class='section-header'><a href='#two-serial-tasks'>Two &quot;serial&quot; tasks</a></h1>
+<pre class="rust rust-example-rendered">
+<span class="attribute">#<span class="op">!</span>[<span class="ident">feature</span>(<span class="ident">const_fn</span>)]</span>
+<span class="attribute">#<span class="op">!</span>[<span class="ident">feature</span>(<span class="ident">used</span>)]</span>
+<span class="attribute">#<span class="op">!</span>[<span class="ident">no_std</span>]</span>
+
+<span class="kw">extern</span> <span class="kw">crate</span> <span class="ident">cortex_m_rt</span>;
+<span class="attribute">#[<span class="ident">macro_use</span>]</span>
+<span class="kw">extern</span> <span class="kw">crate</span> <span class="ident">cortex_m_rtfm</span> <span class="kw">as</span> <span class="ident">rtfm</span>;
+<span class="kw">extern</span> <span class="kw">crate</span> <span class="ident">stm32f30x</span>;
+
+<span class="kw">use</span> <span class="ident">core</span>::<span class="ident">cell</span>::<span class="ident">Cell</span>;
+
+<span class="kw">use</span> <span class="ident">stm32f30x</span>::<span class="ident">interrupt</span>::{<span class="ident">Tim6Dacunder</span>, <span class="ident">Tim7</span>};
+<span class="kw">use</span> <span class="ident">rtfm</span>::{<span class="ident">C1</span>, <span class="ident">C16</span>, <span class="ident">P0</span>, <span class="ident">P1</span>, <span class="ident">Resource</span>};
+
+<span class="comment">// omitted: `idle`, `init`</span>
+
+<span class="macro">tasks</span><span class="macro">!</span>(<span class="ident">stm32f30x</span>, {
+    <span class="ident">t1</span>: <span class="ident">Task</span> {
+        <span class="ident">interrupt</span>: <span class="ident">Tim6Dacunder</span>,
+        <span class="ident">priority</span>: <span class="ident">P1</span>,
+        <span class="ident">enabled</span>: <span class="bool-val">true</span>,
+    },
+    <span class="ident">t2</span>: <span class="ident">Task</span> {
+        <span class="ident">interrupt</span>: <span class="ident">Tim7</span>,
+        <span class="ident">priority</span>: <span class="ident">P1</span>,
+        <span class="ident">enabled</span>: <span class="bool-val">true</span>,
+    },
+});
+
+<span class="comment">// Data shared between tasks `t1` and `t2`</span>
+<span class="kw">static</span> <span class="ident">COUNTER</span>: <span class="ident">Resource</span><span class="op">&lt;</span><span class="ident">Cell</span><span class="op">&lt;</span><span class="ident">u32</span><span class="op">&gt;</span>, <span class="ident">C1</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">Resource</span>::<span class="ident">new</span>(<span class="ident">Cell</span>::<span class="ident">new</span>(<span class="number">0</span>));
+
+<span class="kw">fn</span> <span class="ident">init</span>(<span class="ident">priority</span>: <span class="ident">P0</span>, <span class="ident">ceiling</span>: <span class="kw-2">&amp;</span><span class="ident">C16</span>) {
+    <span class="comment">// ..</span>
+}
+
+<span class="kw">fn</span> <span class="ident">idle</span>(<span class="ident">priority</span>: <span class="ident">P0</span>) <span class="op">-&gt;</span> <span class="op">!</span> {
+    <span class="comment">// Sleep</span>
+    <span class="kw">loop</span> {
+        <span class="ident">rtfm</span>::<span class="ident">wfi</span>();
+    }
+}
+
+<span class="kw">fn</span> <span class="ident">t1</span>(<span class="ident">_task</span>: <span class="ident">Tim6Dacunder</span>, <span class="ident">priority</span>: <span class="ident">P1</span>) {
+    <span class="kw">let</span> <span class="ident">ceiling</span> <span class="op">=</span> <span class="ident">priority</span>.<span class="ident">as_ceiling</span>();
+
+    <span class="kw">let</span> <span class="ident">counter</span> <span class="op">=</span> <span class="ident">COUNTER</span>.<span class="ident">access</span>(<span class="kw-2">&amp;</span><span class="ident">priority</span>, <span class="ident">ceiling</span>);
+
+    <span class="ident">counter</span>.<span class="ident">set</span>(<span class="ident">counter</span>.<span class="ident">get</span>() <span class="op">+</span> <span class="number">1</span>);
+}
+
+<span class="kw">fn</span> <span class="ident">t2</span>(<span class="ident">_task</span>: <span class="ident">Tim7</span>, <span class="ident">priority</span>: <span class="ident">P1</span>) {
+    <span class="kw">let</span> <span class="ident">ceiling</span> <span class="op">=</span> <span class="ident">priority</span>.<span class="ident">as_ceiling</span>();
+
+    <span class="kw">let</span> <span class="ident">counter</span> <span class="op">=</span> <span class="ident">COUNTER</span>.<span class="ident">access</span>(<span class="kw-2">&amp;</span><span class="ident">priority</span>, <span class="ident">ceiling</span>);
+
+    <span class="ident">counter</span>.<span class="ident">set</span>(<span class="ident">counter</span>.<span class="ident">get</span>() <span class="op">+</span> <span class="number">2</span>);
+}</pre>
+
+<p>Here we declare two tasks, <code>t1</code> and <code>t2</code>; both with a priority of 1 (<code>P1</code>).
+As both tasks have the same priority, we say that they are <em>serial</em> tasks in
+the sense that <code>t1</code> can only run <em>after</em> <code>t2</code> is done and vice versa; i.e.
+no preemption between them is possible.</p>
+
+<p>To share data between these two tasks, we use the
+<a href="./struct.Resource.html"><code>Resource</code></a> abstraction. As the tasks can&#39;t preempt
+each other, they can access the <code>COUNTER</code> resource using the zero cost
+<a href="./struct.Resource.html#method.access"><code>access</code></a> method -- no
+synchronization is required.</p>
+
+<p><code>COUNTER</code> has an extra type parameter: <code>C1</code>. This is the <em>ceiling</em> of the
+resource. For now suffices to say that the ceiling must be the maximum of
+the priorities of all the tasks that access the resource -- in this case,
+<code>C1 == max(P1, P1)</code>. If you try a smaller value like <code>C0</code>, you&#39;ll find out
+that your program doesn&#39;t compile.</p>
+
+<h1 id='preemptive-multitasking' class='section-header'><a href='#preemptive-multitasking'>Preemptive multitasking</a></h1>
+<pre class="rust rust-example-rendered">
+<span class="attribute">#<span class="op">!</span>[<span class="ident">feature</span>(<span class="ident">const_fn</span>)]</span>
+<span class="attribute">#<span class="op">!</span>[<span class="ident">feature</span>(<span class="ident">used</span>)]</span>
+<span class="attribute">#<span class="op">!</span>[<span class="ident">no_std</span>]</span>
+
+<span class="kw">extern</span> <span class="kw">crate</span> <span class="ident">cortex_m_rt</span>;
+<span class="attribute">#[<span class="ident">macro_use</span>]</span>
+<span class="kw">extern</span> <span class="kw">crate</span> <span class="ident">cortex_m_rtfm</span> <span class="kw">as</span> <span class="ident">rtfm</span>;
+<span class="kw">extern</span> <span class="kw">crate</span> <span class="ident">stm32f30x</span>;
+
+<span class="kw">use</span> <span class="ident">core</span>::<span class="ident">cell</span>::<span class="ident">Cell</span>;
+
+<span class="kw">use</span> <span class="ident">stm32f30x</span>::<span class="ident">interrupt</span>::{<span class="ident">Tim6Dacunder</span>, <span class="ident">Tim7</span>};
+<span class="kw">use</span> <span class="ident">rtfm</span>::{<span class="ident">C1</span>, <span class="ident">C16</span>, <span class="ident">C2</span>, <span class="ident">P0</span>, <span class="ident">P1</span>, <span class="ident">P2</span>, <span class="ident">Resource</span>};
+
+<span class="macro">tasks</span><span class="macro">!</span>(<span class="ident">stm32f30x</span>, {
+    <span class="ident">t1</span>: <span class="ident">Task</span> {
+        <span class="ident">interrupt</span>: <span class="ident">Tim6Dacunder</span>,
+        <span class="ident">priority</span>: <span class="ident">P1</span>,
+        <span class="ident">enabled</span>: <span class="bool-val">true</span>,
+    },
+    <span class="ident">t2</span>: <span class="ident">Task</span> {
+        <span class="ident">interrupt</span>: <span class="ident">Tim7</span>,
+        <span class="ident">priority</span>: <span class="ident">P2</span>,
+        <span class="ident">enabled</span>: <span class="bool-val">true</span>,
+    },
+});
+
+<span class="kw">static</span> <span class="ident">COUNTER</span>: <span class="ident">Resource</span><span class="op">&lt;</span><span class="ident">Cell</span><span class="op">&lt;</span><span class="ident">u32</span><span class="op">&gt;</span>, <span class="ident">C2</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">Resource</span>::<span class="ident">new</span>(<span class="ident">Cell</span>::<span class="ident">new</span>(<span class="number">0</span>));
+
+<span class="kw">fn</span> <span class="ident">init</span>(<span class="ident">priority</span>: <span class="ident">P0</span>, <span class="ident">ceiling</span>: <span class="kw-2">&amp;</span><span class="ident">C16</span>) {
+    <span class="comment">// ..</span>
+}
+
+<span class="kw">fn</span> <span class="ident">idle</span>(<span class="ident">priority</span>: <span class="ident">P0</span>) <span class="op">-&gt;</span> <span class="op">!</span> {
+    <span class="comment">// Sleep</span>
+    <span class="kw">loop</span> {
+        <span class="ident">rtfm</span>::<span class="ident">wfi</span>();
+    }
+}
+
+<span class="kw">fn</span> <span class="ident">t1</span>(<span class="ident">_task</span>: <span class="ident">Tim6Dacunder</span>, <span class="ident">priority</span>: <span class="ident">P1</span>) {
+    <span class="comment">// ..</span>
+
+    <span class="kw">let</span> <span class="ident">ceiling</span>: <span class="kw-2">&amp;</span><span class="ident">C1</span> <span class="op">=</span> <span class="ident">priority</span>.<span class="ident">as_ceiling</span>();
+
+    <span class="ident">ceiling</span>.<span class="ident">raise</span>(
+        <span class="kw-2">&amp;</span><span class="ident">COUNTER</span>, <span class="op">|</span><span class="ident">ceiling</span>: <span class="kw-2">&amp;</span><span class="ident">C2</span><span class="op">|</span> {
+            <span class="kw">let</span> <span class="ident">counter</span> <span class="op">=</span> <span class="ident">COUNTER</span>.<span class="ident">access</span>(<span class="kw-2">&amp;</span><span class="ident">priority</span>, <span class="ident">ceiling</span>);
+
+            <span class="ident">counter</span>.<span class="ident">set</span>(<span class="ident">counter</span>.<span class="ident">get</span>() <span class="op">+</span> <span class="number">1</span>);
+        }
+    );
+
+    <span class="comment">// ..</span>
+}
+
+<span class="kw">fn</span> <span class="ident">t2</span>(<span class="ident">_task</span>: <span class="ident">Tim7</span>, <span class="ident">priority</span>: <span class="ident">P2</span>) {
+    <span class="kw">let</span> <span class="ident">ceiling</span> <span class="op">=</span> <span class="ident">priority</span>.<span class="ident">as_ceiling</span>();
+
+    <span class="kw">let</span> <span class="ident">counter</span> <span class="op">=</span> <span class="ident">COUNTER</span>.<span class="ident">access</span>(<span class="kw-2">&amp;</span><span class="ident">priority</span>, <span class="ident">ceiling</span>);
+
+    <span class="ident">counter</span>.<span class="ident">set</span>(<span class="ident">counter</span>.<span class="ident">get</span>() <span class="op">+</span> <span class="number">2</span>);
+}</pre>
+
+<p>Now we have a variation of the previous example. Like before, <code>t1</code> has a
+priority of 1 (<code>P1</code>) but <code>t2</code> now has a priority of 2 (<code>P2</code>). This means
+that <code>t2</code> can preempt <code>t1</code> if a <code>Tim7</code> interrupt occurs while <code>t1</code> is
+being executed.</p>
+
+<p>To avoid data races, <code>t1</code> must modify <code>COUNTER</code> in an atomic way; i.e. <code>t2</code>
+most not preempt <code>t1</code> while <code>COUNTER</code> is being modified. This is
+accomplished by <a href="./struct.C.html#method.raise"><code>raise</code></a>-ing the <code>ceiling</code>.
+This creates a critical section, denoted by a closure; for whose execution,
+<code>COUNTER</code> is accessible but <code>t2</code> is blocked from preempting <code>t1</code>.</p>
+
+<p>How <code>t2</code> accesses <code>COUNTER</code> remains unchanged. Since <code>t1</code> can&#39;t preempt <code>t2</code>
+due to the differences in priority; no critical section is needed in <code>t2</code>.</p>
+
+<p>Note that the ceiling of <code>COUNTER</code> had to  be changed to <code>C2</code>. This is
+required because the ceiling must be the maximum between <code>P1</code> and <code>P2</code>.</p>
+
+<p>Finally, it should be noted that the critical section in <code>t1</code> will only
+block tasks with a priority of 2 or lower. This is exactly what the ceiling
+represents: it&#39;s the &quot;bar&quot; that a task priority must pass in order to be
+able to preempt the current task / critical section. Note that a task with
+e.g. a priority of 3 (<code>P3</code>) effectively imposes a ceiling of 3 (<code>C3</code>)
+because only other task with a priority of 4 or greater can preempt it.</p>
+
+<h1 id='peripherals-as-resources' class='section-header'><a href='#peripherals-as-resources'>Peripherals as resources</a></h1>
+<pre class="rust rust-example-rendered">
+<span class="attribute">#<span class="op">!</span>[<span class="ident">feature</span>(<span class="ident">const_fn</span>)]</span>
+<span class="attribute">#<span class="op">!</span>[<span class="ident">feature</span>(<span class="ident">used</span>)]</span>
+<span class="attribute">#<span class="op">!</span>[<span class="ident">no_std</span>]</span>
+
+<span class="kw">extern</span> <span class="kw">crate</span> <span class="ident">cortex_m_rt</span>;
+<span class="attribute">#[<span class="ident">macro_use</span>]</span>
+<span class="kw">extern</span> <span class="kw">crate</span> <span class="ident">cortex_m_rtfm</span> <span class="kw">as</span> <span class="ident">rtfm</span>;
+<span class="kw">extern</span> <span class="kw">crate</span> <span class="ident">stm32f30x</span>;
+
+<span class="kw">use</span> <span class="ident">rtfm</span>::{<span class="ident">C0</span>, <span class="ident">C16</span>, <span class="ident">P0</span>, <span class="ident">Peripheral</span>};
+
+<span class="macro">peripherals</span><span class="macro">!</span>(<span class="ident">stm32f30x</span>, {
+    <span class="ident">GPIOA</span>: <span class="ident">Peripheral</span> {
+        <span class="ident">register_block</span>: <span class="ident">Gpioa</span>,
+        <span class="ident">ceiling</span>: <span class="ident">C0</span>,
+    },
+    <span class="ident">RCC</span>: <span class="ident">Peripheral</span> {
+        <span class="ident">register_block</span>: <span class="ident">Rcc</span>,
+        <span class="ident">ceiling</span>: <span class="ident">C0</span>,
+    },
+});
+
+<span class="macro">tasks</span><span class="macro">!</span>(<span class="ident">stm32f30x</span>, {});
+
+<span class="kw">fn</span> <span class="ident">init</span>(<span class="ident">priority</span>: <span class="ident">P0</span>, <span class="ident">ceiling</span>: <span class="kw-2">&amp;</span><span class="ident">C16</span>) {
+    <span class="kw">let</span> <span class="ident">gpioa</span> <span class="op">=</span> <span class="ident">GPIOA</span>.<span class="ident">access</span>(<span class="kw-2">&amp;</span><span class="ident">priority</span>, <span class="kw-2">&amp;</span><span class="ident">ceiling</span>);
+    <span class="kw">let</span> <span class="ident">rcc</span> <span class="op">=</span> <span class="ident">RCC</span>.<span class="ident">access</span>(<span class="kw-2">&amp;</span><span class="ident">priority</span>, <span class="kw-2">&amp;</span><span class="ident">ceiling</span>);
+
+    <span class="comment">// ..</span>
+}
+
+<span class="kw">fn</span> <span class="ident">idle</span>(<span class="ident">_priority</span>: <span class="ident">P0</span>) <span class="op">-&gt;</span> <span class="op">!</span> {
+    <span class="comment">// Sleep</span>
+    <span class="kw">loop</span> {
+        <span class="ident">rtfm</span>::<span class="ident">wfi</span>();
+    }
+}</pre>
+
+<p>Peripherals are global resources too and as such they can be protected in
+the same way as <code>Resource</code>s using the
+<a href="./struct.Peripheral.html"><code>Peripheral</code></a> abstraction.</p>
+
+<p><code>Peripheral</code> and <code>Resource</code> has pretty much the same API except that
+<code>Peripheral</code> instances must be declared using the
+<a href="./macro.peripherals.html"><code>peripherals!</code></a> macro.</p>
+
+<h1 id='references' class='section-header'><a href='#references'>References</a></h1>
+<ul>
+<li>Baker, T. P. (1991). Stack-based scheduling of realtime processes.
+<em>Real-Time Systems</em>, 3(1), 67-99.</li>
+</ul>
+
+<blockquote>
+<p>The original Stack Resource Policy paper. <a href="http://www.diva-portal.org/smash/get/diva2:1005680/FULLTEXT01.pdf">PDF</a>.</p>
+</blockquote>
+
+<ul>
+<li>Eriksson, J., Häggström, F., Aittamaa, S., Kruglyak, A., &amp; Lindgren, P.
+(2013, June). Real-time for the masses, step 1: Programming API and static
+priority SRP kernel primitives. In Industrial Embedded Systems (SIES),
+2013 8th IEEE International Symposium on (pp. 110-113). IEEE.</li>
+</ul>
+
+<blockquote>
+<p>A description of the RTFM task and resource model. <a href="http://www.diva-portal.org/smash/get/diva2:1005680/FULLTEXT01.pdf">PDF</a></p>
+</blockquote>
+</div><h2 id='macros' class='section-header'><a href="#macros">Macros</a></h2>
+<table>
+                       <tr class=' module-item'>
+                           <td><a class="macro" href="macro.peripherals.html"
+                                  title='macro cortex_m_rtfm::peripherals'>peripherals</a></td>
+                           <td class='docblock-short'>
+                                <p>A macro to assign ceilings to peripherals</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="macro" href="macro.tasks.html"
+                                  title='macro cortex_m_rtfm::tasks'>tasks</a></td>
+                           <td class='docblock-short'>
+                                <p>A macro to declare tasks</p>
+                           </td>
+                       </tr></table><h2 id='structs' class='section-header'><a href="#structs">Structs</a></h2>
+<table>
+                       <tr class=' module-item'>
+                           <td><a class="struct" href="struct.C.html"
+                                  title='struct cortex_m_rtfm::C'>C</a></td>
+                           <td class='docblock-short'>
+                                <p>A type-level ceiling</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="struct" href="struct.Local.html"
+                                  title='struct cortex_m_rtfm::Local'>Local</a></td>
+                           <td class='docblock-short'>
+                                <p>Task local data</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="struct" href="struct.P.html"
+                                  title='struct cortex_m_rtfm::P'>P</a></td>
+                           <td class='docblock-short'>
+                                <p>A type-level priority</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="struct" href="struct.Peripheral.html"
+                                  title='struct cortex_m_rtfm::Peripheral'>Peripheral</a></td>
+                           <td class='docblock-short'>
+                                <p>A hardware peripheral as a resource</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="struct" href="struct.Resource.html"
+                                  title='struct cortex_m_rtfm::Resource'>Resource</a></td>
+                           <td class='docblock-short'>
+                                <p>A resource with ceiling <code>C</code></p>
+                           </td>
+                       </tr></table><h2 id='traits' class='section-header'><a href="#traits">Traits</a></h2>
+<table>
+                       <tr class=' module-item'>
+                           <td><a class="trait" href="trait.GreaterThanOrEqual.html"
+                                  title='trait cortex_m_rtfm::GreaterThanOrEqual'>GreaterThanOrEqual</a></td>
+                           <td class='docblock-short'>
+                                <p>Type-level <code>&gt;=</code> operator</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="trait" href="trait.LessThanOrEqual.html"
+                                  title='trait cortex_m_rtfm::LessThanOrEqual'>LessThanOrEqual</a></td>
+                           <td class='docblock-short'>
+                                <p>Type-level <code>&lt;=</code> operator</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="trait" href="trait.ResourceLike.html"
+                                  title='trait cortex_m_rtfm::ResourceLike'>ResourceLike</a></td>
+                           <td class='docblock-short'>
+                                <p>Maps a <code>Resource</code> / <code>Peripheral</code> to its ceiling</p>
+                           </td>
+                       </tr></table><h2 id='functions' class='section-header'><a href="#functions">Functions</a></h2>
+<table>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.atomic.html"
+                                  title='fn cortex_m_rtfm::atomic'>atomic</a></td>
+                           <td class='docblock-short'>
+                                <p>Runs the closure <code>f</code> &quot;atomically&quot;</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.bkpt.html"
+                                  title='fn cortex_m_rtfm::bkpt'>bkpt</a></td>
+                           <td class='docblock-short'>
+                                <p>Puts the processor in Debug state. Debuggers can pick this up as a
+&quot;breakpoint&quot;.</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.disable.html"
+                                  title='fn cortex_m_rtfm::disable'>disable</a></td>
+                           <td class='docblock-short'>
+                                <p>Disables a <code>task</code></p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.enable.html"
+                                  title='fn cortex_m_rtfm::enable'>enable</a></td>
+                           <td class='docblock-short'>
+                                <p>Enables a <code>task</code></p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.hw2logical.html"
+                                  title='fn cortex_m_rtfm::hw2logical'>hw2logical</a></td>
+                           <td class='docblock-short'>
+                                <p>Converts a shifted hardware priority into a logical priority</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.logical2hw.html"
+                                  title='fn cortex_m_rtfm::logical2hw'>logical2hw</a></td>
+                           <td class='docblock-short'>
+                                <p>Converts a logical priority into a shifted hardware priority, as used by the
+NVIC and the BASEPRI register</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.request.html"
+                                  title='fn cortex_m_rtfm::request'>request</a></td>
+                           <td class='docblock-short'>
+                                <p>Requests the execution of a <code>task</code></p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="fn" href="fn.wfi.html"
+                                  title='fn cortex_m_rtfm::wfi'>wfi</a></td>
+                           <td class='docblock-short'>
+                                <p>Wait For Interrupt</p>
+                           </td>
+                       </tr></table><h2 id='types' class='section-header'><a href="#types">Type Definitions</a></h2>
+<table>
+                       <tr class=' module-item'>
+                           <td><a class="type" href="type.C0.html"
+                                  title='type cortex_m_rtfm::C0'>C0</a></td>
+                           <td class='docblock-short'>
+                                <p>A ceiling of 0</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="type" href="type.C1.html"
+                                  title='type cortex_m_rtfm::C1'>C1</a></td>
+                           <td class='docblock-short'>
+                                <p>A ceiling of 1</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="type" href="type.C2.html"
+                                  title='type cortex_m_rtfm::C2'>C2</a></td>
+                           <td class='docblock-short'>
+                                <p>A ceiling of 2</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="type" href="type.C3.html"
+                                  title='type cortex_m_rtfm::C3'>C3</a></td>
+                           <td class='docblock-short'>
+                                <p>A ceiling of 3</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="type" href="type.C4.html"
+                                  title='type cortex_m_rtfm::C4'>C4</a></td>
+                           <td class='docblock-short'>
+                                <p>A ceiling of 4</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="type" href="type.C5.html"
+                                  title='type cortex_m_rtfm::C5'>C5</a></td>
+                           <td class='docblock-short'>
+                                <p>A ceiling of 5</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="type" href="type.C6.html"
+                                  title='type cortex_m_rtfm::C6'>C6</a></td>
+                           <td class='docblock-short'>
+                                <p>A ceiling of 6</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="type" href="type.C7.html"
+                                  title='type cortex_m_rtfm::C7'>C7</a></td>
+                           <td class='docblock-short'>
+                                <p>A ceiling of 7</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="type" href="type.C8.html"
+                                  title='type cortex_m_rtfm::C8'>C8</a></td>
+                           <td class='docblock-short'>
+                                <p>A ceiling of 8</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="type" href="type.C9.html"
+                                  title='type cortex_m_rtfm::C9'>C9</a></td>
+                           <td class='docblock-short'>
+                                <p>A ceiling of 9</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="type" href="type.C10.html"
+                                  title='type cortex_m_rtfm::C10'>C10</a></td>
+                           <td class='docblock-short'>
+                                <p>A ceiling of 10</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="type" href="type.C11.html"
+                                  title='type cortex_m_rtfm::C11'>C11</a></td>
+                           <td class='docblock-short'>
+                                <p>A ceiling of 11</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="type" href="type.C12.html"
+                                  title='type cortex_m_rtfm::C12'>C12</a></td>
+                           <td class='docblock-short'>
+                                <p>A ceiling of 12</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="type" href="type.C13.html"
+                                  title='type cortex_m_rtfm::C13'>C13</a></td>
+                           <td class='docblock-short'>
+                                <p>A ceiling of 13</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="type" href="type.C14.html"
+                                  title='type cortex_m_rtfm::C14'>C14</a></td>
+                           <td class='docblock-short'>
+                                <p>A ceiling of 14</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="type" href="type.C15.html"
+                                  title='type cortex_m_rtfm::C15'>C15</a></td>
+                           <td class='docblock-short'>
+                                <p>A ceiling of 15</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="type" href="type.C16.html"
+                                  title='type cortex_m_rtfm::C16'>C16</a></td>
+                           <td class='docblock-short'>
+                                <p>A ceiling of 16</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="type" href="type.CMAX.html"
+                                  title='type cortex_m_rtfm::CMAX'>CMAX</a></td>
+                           <td class='docblock-short'>
+                                <p>Maximum ceiling</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="type" href="type.P0.html"
+                                  title='type cortex_m_rtfm::P0'>P0</a></td>
+                           <td class='docblock-short'>
+                                <p>A priority of 0, the lowest priority</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="type" href="type.P1.html"
+                                  title='type cortex_m_rtfm::P1'>P1</a></td>
+                           <td class='docblock-short'>
+                                <p>A priority of 1</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="type" href="type.P2.html"
+                                  title='type cortex_m_rtfm::P2'>P2</a></td>
+                           <td class='docblock-short'>
+                                <p>A priority of 2</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="type" href="type.P3.html"
+                                  title='type cortex_m_rtfm::P3'>P3</a></td>
+                           <td class='docblock-short'>
+                                <p>A priority of 3</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="type" href="type.P4.html"
+                                  title='type cortex_m_rtfm::P4'>P4</a></td>
+                           <td class='docblock-short'>
+                                <p>A priority of 4</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="type" href="type.P5.html"
+                                  title='type cortex_m_rtfm::P5'>P5</a></td>
+                           <td class='docblock-short'>
+                                <p>A priority of 5</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="type" href="type.P6.html"
+                                  title='type cortex_m_rtfm::P6'>P6</a></td>
+                           <td class='docblock-short'>
+                                <p>A priority of 6</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="type" href="type.P7.html"
+                                  title='type cortex_m_rtfm::P7'>P7</a></td>
+                           <td class='docblock-short'>
+                                <p>A priority of 7</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="type" href="type.P8.html"
+                                  title='type cortex_m_rtfm::P8'>P8</a></td>
+                           <td class='docblock-short'>
+                                <p>A priority of 8</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="type" href="type.P9.html"
+                                  title='type cortex_m_rtfm::P9'>P9</a></td>
+                           <td class='docblock-short'>
+                                <p>A priority of 9</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="type" href="type.P10.html"
+                                  title='type cortex_m_rtfm::P10'>P10</a></td>
+                           <td class='docblock-short'>
+                                <p>A priority of 10</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="type" href="type.P11.html"
+                                  title='type cortex_m_rtfm::P11'>P11</a></td>
+                           <td class='docblock-short'>
+                                <p>A priority of 11</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="type" href="type.P12.html"
+                                  title='type cortex_m_rtfm::P12'>P12</a></td>
+                           <td class='docblock-short'>
+                                <p>A priority of 12</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="type" href="type.P13.html"
+                                  title='type cortex_m_rtfm::P13'>P13</a></td>
+                           <td class='docblock-short'>
+                                <p>A priority of 13</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="type" href="type.P14.html"
+                                  title='type cortex_m_rtfm::P14'>P14</a></td>
+                           <td class='docblock-short'>
+                                <p>A priority of 14</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="type" href="type.P15.html"
+                                  title='type cortex_m_rtfm::P15'>P15</a></td>
+                           <td class='docblock-short'>
+                                <p>A priority of 15</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="type" href="type.P16.html"
+                                  title='type cortex_m_rtfm::P16'>P16</a></td>
+                           <td class='docblock-short'>
+                                <p>A priority of 16, the highest priority</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="type" href="type.UMAX.html"
+                                  title='type cortex_m_rtfm::UMAX'>UMAX</a></td>
+                           <td class='docblock-short'>
+                                <p>Maximum priority level</p>
+                           </td>
+                       </tr></table></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <aside id="help" class="hidden">
+        <div>
+            <h1 class="hidden">Help</h1>
+
+            <div class="shortcuts">
+                <h2>Keyboard Shortcuts</h2>
+
+                <dl>
+                    <dt>?</dt>
+                    <dd>Show this help dialog</dd>
+                    <dt>S</dt>
+                    <dd>Focus the search field</dd>
+                    <dt>&larrb;</dt>
+                    <dd>Move up in search results</dd>
+                    <dt>&rarrb;</dt>
+                    <dd>Move down in search results</dd>
+                    <dt>&#9166;</dt>
+                    <dd>Go to active search result</dd>
+                    <dt>+</dt>
+                    <dd>Collapse/expand all sections</dd>
+                </dl>
+            </div>
+
+            <div class="infos">
+                <h2>Search Tricks</h2>
+
+                <p>
+                    Prefix searches with a type followed by a colon (e.g.
+                    <code>fn:</code>) to restrict the search to a given type.
+                </p>
+
+                <p>
+                    Accepted types are: <code>fn</code>, <code>mod</code>,
+                    <code>struct</code>, <code>enum</code>,
+                    <code>trait</code>, <code>type</code>, <code>macro</code>,
+                    and <code>const</code>.
+                </p>
+
+                <p>
+                    Search functions by type signature (e.g.
+                    <code>vec -> usize</code> or <code>* -> vec</code>)
+                </p>
+            </div>
+        </div>
+    </aside>
+
+    
+
+    <script>
+        window.rootPath = "../";
+        window.currentCrate = "cortex_m_rtfm";
+    </script>
+    <script src="../jquery.js"></script>
+    <script src="../main.js"></script>
+    <script defer src="../search-index.js"></script>
+</body>
+</html>
